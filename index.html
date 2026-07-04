@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEPSE · Multi-chart dashboard (excl. GLH, GHL)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
+        body { background: #f4f8fe; padding: 2rem 1.5rem; color: #0b1a2e; }
+        .dashboard { max-width: 1440px; margin: 0 auto; }
+        h1 { font-weight: 600; font-size: 2rem; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.25rem; }
+        .subhead { color: #2f4b6e; font-weight: 400; font-size: 0.95rem; margin-bottom: 2rem; border-left: 4px solid #1f6fcf; padding-left: 1rem; background: #e9f0f8; border-radius: 0 12px 12px 0; width: fit-content; padding: 0.5rem 1.5rem; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.2rem; margin-bottom: 2.5rem; }
+        .kpi-card { background: white; border-radius: 24px; padding: 1.4rem 1.2rem 1rem; box-shadow: 0 8px 20px rgba(0,20,50,0.04); border: 1px solid rgba(0,0,0,0.02); transition: 0.2s; display: flex; flex-direction: column; }
+        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 14px 28px rgba(0,20,50,0.08); }
+        .kpi-label { font-size: 0.8rem; font-weight: 500; color: #4b637c; letter-spacing: 0.02em; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .kpi-label i { color: #1f6fcf; width: 1.4rem; text-align: center; }
+        .kpi-value { font-size: 1.7rem; font-weight: 700; color: #0b1a2e; line-height: 1.2; margin-bottom: 2px; }
+        .kpi-sub { font-size: 0.72rem; color: #5f7895; border-top: 1px solid #e9eff5; padding-top: 8px; margin-top: 6px; display: flex; justify-content: space-between; }
+        .kpi-sub span { background: #eef4fa; padding: 0.1rem 0.6rem; border-radius: 40px; font-weight: 500; color: #1a3b5e; }
+        .badge-highlight { background: #dce8f5; border-radius: 40px; padding: 0.1rem 0.7rem; font-size: 0.7rem; font-weight: 600; color: #1a3b5e; }
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.8rem; }
+        .chart-wrapper { background: white; border-radius: 28px; padding: 1.5rem 1.5rem 0.8rem; box-shadow: 0 12px 28px rgba(0,20,50,0.04); border: 1px solid rgba(255,255,255,0.5); }
+        .chart-wrapper.full { grid-column: 1 / -1; }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; flex-wrap: wrap; }
+        .chart-header h3 { font-weight: 600; font-size: 1.1rem; color: #142b44; display: flex; align-items: center; gap: 8px; }
+        .chart-container { position: relative; height: 280px; width: 100%; }
+        .chart-container.tall { height: 340px; }
+        .legend-note { text-align: right; font-size: 0.65rem; color: #5c7693; margin-top: 0.2rem; padding-right: 0.5rem; }
+        .footer-attribution { margin-top: 2rem; color: #7189a6; font-size: 0.8rem; text-align: right; border-top: 1px solid #dde5ef; padding-top: 1.2rem; }
+        @media (max-width: 860px) { .chart-grid { grid-template-columns: 1fr; } .chart-wrapper.full { grid-column: 1; } }
+        @media (max-width: 640px) { body { padding: 1rem; } .kpi-grid { grid-template-columns: 1fr 1fr; gap: 0.8rem; } .kpi-card { padding: 1rem; } .kpi-value { font-size: 1.3rem; } .chart-container { height: 220px; } .chart-container.tall { height: 260px; } }
+    </style>
+</head>
+<body>
+<div class="dashboard">
+    <h1><i class="fas fa-chart-line" style="color: #1a5faf;"></i> Market cap · NEPSE <span style="font-size: 1.2rem; font-weight: 400; color: #3f5f7f; margin-left: 0.5rem;">(excl. GLH, GHL)</span></h1>
+    <div class="subhead"><i class="fas fa-chart-pie"></i> 44 companies · 4 charts: bar, donut, bubble, horizontal bar</div>
+
+    <!-- KPI grid -->
+    <div class="kpi-grid" id="kpiContainer"></div>
+
+    <!-- Chart 1: main bar (full width) -->
+    <div class="chart-wrapper full">
+        <div class="chart-header">
+            <h3><i class="fas fa-chart-bar"></i> Top 20 · Total & floated mcap (NPR M)</h3>
+            <span class="badge-highlight"><i class="far fa-calendar-alt"></i> 2026 · Q2</span>
+        </div>
+        <div class="chart-container tall" id="barChartContainer">
+            <canvas id="mcapChart"></canvas>
+        </div>
+        <div class="legend-note"><i class="fas fa-circle" style="color: #1f6fcf;"></i> Total &nbsp;|&nbsp; <i class="fas fa-circle" style="color: #ff9f4a;"></i> Floated</div>
+    </div>
+
+    <!-- Chart grid: 2 columns -->
+    <div class="chart-grid">
+        <!-- Chart 2: Sector donut -->
+        <div class="chart-wrapper">
+            <div class="chart-header">
+                <h3><i class="fas fa-building"></i> Sector split (mcap)</h3>
+                <span class="badge-highlight">hydropower vs finance</span>
+            </div>
+            <div class="chart-container"><canvas id="sectorChart"></canvas></div>
+        </div>
+
+        <!-- Chart 3: Liquidity vs Market Cap (bubble) -->
+        <div class="chart-wrapper">
+            <div class="chart-header">
+                <h3><i class="fas fa-bullseye"></i> Liquidity vs mcap</h3>
+                <span class="badge-highlight">bubble = value traded</span>
+            </div>
+            <div class="chart-container"><canvas id="bubbleChart"></canvas></div>
+        </div>
+
+        <!-- Chart 4: Top 10 by liquidity (horizontal bar) -->
+        <div class="chart-wrapper full">
+            <div class="chart-header">
+                <h3><i class="fas fa-tachometer-alt"></i> Top 10 · liquidity ratio (%)</h3>
+                <span class="badge-highlight">volume / shares out</span>
+            </div>
+            <div class="chart-container tall"><canvas id="liquidityBarChart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="footer-attribution"><i class="fas fa-database"></i> 44 symbols · GLH & GHL excluded · 4 interactive charts</div>
+</div>
+
+<script>
+    (function() {
+        // ----- DATA (exclude GLH, GHL) -----
+        const fullData = [
+            { symbol: "MHNL", company: "Mountain Hydro Nepal Limited", ltp: 245.6, sharesOut: 12500000, floated: 12500000, mcap: 3070000000, floatedMcap: 3070000000, impact: "0.07 %", vol50d: 11758.6 },
+            { symbol: "RHGCL", company: "Rapti Hydro and General Construction Limited", ltp: 273, sharesOut: 12255876, floated: 12255876, mcap: 3345854148, floatedMcap: 3345854148, impact: "0.07 %", vol50d: 37312.18 },
+            { symbol: "BARUN", company: "Barun Hydropower Co. Ltd.", ltp: 322, sharesOut: 11225324, floated: 11225324.3, mcap: 3614554424.6, floatedMcap: 3614554425, impact: "0.08 %", vol50d: 34485.5 },
+            { symbol: "PMHPL", company: "Panchakanya Mai Hydropower Ltd", ltp: 326.5, sharesOut: 11000000, floated: 11000000, mcap: 3591500000, floatedMcap: 3591500000, impact: "0.08 %", vol50d: 7131.7 },
+            { symbol: "HHL", company: "Himalayan Hydropower Limited", ltp: 339.8, sharesOut: 10950000, floated: 10950000, mcap: 3720810000, floatedMcap: 3720810000, impact: "0.08 %", vol50d: 49112.3 },
+            { symbol: "PFL", company: "Pokhara Finance Ltd.", ltp: 364.9, sharesOut: 10825566, floated: 4330226.4, mcap: 3950249031.3, floatedMcap: 1580099613, impact: "0.09 %", vol50d: 5924.44 },
+            { symbol: "MKHC", company: "Maya Khola Hydropower Company Limited", ltp: 301.5, sharesOut: 10000000, floated: 10000000, mcap: 3015000000, floatedMcap: 3015000000, impact: "0.07 %", vol50d: 17340.46 },
+            { symbol: "NRM", company: "Nepal Republic Media Limited", ltp: 330, sharesOut: 9675000, floated: 9675000, mcap: 3192750000, floatedMcap: 3192750000, impact: "0.07 %", vol50d: 19341.58 },
+            { symbol: "PPCL", company: "Panchthar Power Company Limited", ltp: 347, sharesOut: 9625000, floated: 9625000, mcap: 3339875000, floatedMcap: 3339875000, impact: "0.07 %", vol50d: 11874.1 },
+            { symbol: "PPL", company: "People`s Power Limited", ltp: 337, sharesOut: 9489000, floated: 9489000, mcap: 3197793000, floatedMcap: 3197793000, impact: "0.07 %", vol50d: 22180.16 },
+            { symbol: "KKHC", company: "Khanikhola Hydropower Co. Ltd.", ltp: 258, sharesOut: 9314286, floated: 9314286, mcap: 2403085788, floatedMcap: 2403085788, impact: "0.05 %", vol50d: 54368.78 },
+            { symbol: "PROFL", company: "ProgressiveFinance Limited", ltp: 439.5, sharesOut: 8481060, floated: 4155719.4, mcap: 3727425870, floatedMcap: 1826438676, impact: "0.08 %", vol50d: 8115.54 },
+            { symbol: "SFCL", company: "Samriddhi Finance Company Limited", ltp: 375.8, sharesOut: 8189115, floated: 3327237.42, mcap: 3077469417, floatedMcap: 1250375824, impact: "0.07 %", vol50d: 9193.94 },
+            { symbol: "MHCL", company: "Molung Hydropower Company Limited", ltp: 333, sharesOut: 8025000, floated: 8025000, mcap: 2672325000, floatedMcap: 2672325000, impact: "0.06 %", vol50d: 5343.74 },
+            { symbol: "TPC", company: "Terhathum Power Company Limited", ltp: 360, sharesOut: 8000000, floated: 8000000, mcap: 2880000000, floatedMcap: 2880000000, impact: "0.06 %", vol50d: 22672.32 },
+            { symbol: "BNHC", company: "Buddha Bhumi Nepal Hydro Power Co. Ltd.", ltp: 314.7, sharesOut: 8000000, floated: 8000000, mcap: 2517600000, floatedMcap: 2517600000, impact: "0.06 %", vol50d: 5764.36 },
+            { symbol: "MEHL", company: "Manakamana Engineering Hydropower Limited", ltp: 332, sharesOut: 8000000, floated: 2576620, mcap: 2656000000, floatedMcap: 855437840, impact: "0.06 %", vol50d: 4501.1 },
+            { symbol: "NFS", company: "Nepal Finance Ltd.", ltp: 583, sharesOut: 7756468, floated: 3102587, mcap: 4522020552.5, floatedMcap: 1808808221, impact: "0.10 %", vol50d: 15048.12 },
+            { symbol: "CHL", company: "Chhyangdi Hydropower Ltd.", ltp: 267.1, sharesOut: 7739550, floated: 7739550, mcap: 2067233805, floatedMcap: 2067233805, impact: "0.05 %", vol50d: 19046.64 },
+            { symbol: "MAKAR", company: "Makar Jitumaya Suri Hydropower Company Limited", ltp: 473.1, sharesOut: 7600000, floated: 7600000, mcap: 3595560000, floatedMcap: 3595560000, impact: "0.08 %", vol50d: 8627.08 },
+            { symbol: "UNHPL", company: "Union Hydropower Limited", ltp: 388, sharesOut: 7500000, floated: 7500000, mcap: 2910000000, floatedMcap: 2910000000, impact: "0.06 %", vol50d: 55689.84 },
+            { symbol: "NMBMF", company: "NMB Microfinance Bittiya Sanstha Ltd.", ltp: 626.9, sharesOut: 7214492, floated: 2885796.6, mcap: 4522764721.35, floatedMcap: 1809105889, impact: "0.10 %", vol50d: 1506.74 },
+            { symbol: "JFL", company: "Janaki Finance Ltd.", ltp: 396, sharesOut: 6904728, floated: 3383316.92, mcap: 2734272449.96, floatedMcap: 1339793500, impact: "0.06 %", vol50d: 6130.36 },
+            { symbol: "BGWT", company: "Bhagawati Hydropower Development Company Ltd", ltp: 586.2, sharesOut: 6782399, floated: 997012.54, mcap: 3975842342.57, floatedMcap: 584448749, impact: "0.09 %", vol50d: 2338.8 },
+            { symbol: "MHL", company: "Mandakini Hydropower Limited", ltp: 476, sharesOut: 6467671, floated: 6467670.85, mcap: 3078611326.44, floatedMcap: 3078611326, impact: "0.07 %", vol50d: 6171.24 },
+            { symbol: "SMH", company: "Supermai Hydropower Limited", ltp: 531, sharesOut: 6420000, floated: 6420000, mcap: 3409020000, floatedMcap: 3409020000, impact: "0.07 %", vol50d: 8587.54 },
+            { symbol: "RURU", company: "Ru Ru Jalbidhyut Pariyojana Limited", ltp: 644.9, sharesOut: 6240544, floated: 6240544.24, mcap: 4024526977.64, floatedMcap: 4024526978, impact: "0.09 %", vol50d: 5690.94 },
+            { symbol: "EHPL", company: "Eastern Hydropower Limited", ltp: 371, sharesOut: 6200000, floated: 6200000, mcap: 2300200000, floatedMcap: 2300200000, impact: "0.05 %", vol50d: 23576.52 },
+            { symbol: "JOSHI", company: "Joshi Hydropower Development Company Ltd", ltp: 269.1, sharesOut: 6128100, floated: 6128100, mcap: 1649071710, floatedMcap: 1649071710, impact: "0.04 %", vol50d: 13792.62 },
+            { symbol: "MPFL", company: "Multipurpose Finance Company Limited", ltp: 612, sharesOut: 6102000, floated: 2989980, mcap: 3734424000, floatedMcap: 1829867760, impact: "0.08 %", vol50d: 22175.74 },
+            { symbol: "IHL", company: "Ingwa Hydropower Limited", ltp: 373.5, sharesOut: 6000000, floated: 6000000, mcap: 2241000000, floatedMcap: 2241000000, impact: "0.05 %", vol50d: 20866 },
+            { symbol: "UHEWA", company: "Upper Hewakhola Hydropower Company Limited", ltp: 587, sharesOut: 5750000, floated: 5750000, mcap: 3375250000, floatedMcap: 3375250000, impact: "0.07 %", vol50d: 37562.76 },
+            { symbol: "SINDU", company: "Sindhu Bikash Bank Ltd", ltp: 721.9, sharesOut: 5574561, floated: 2731534.73, mcap: 4024275347.67, floatedMcap: 1971894920, impact: "0.09 %", vol50d: 11605.88 },
+            { symbol: "BEDC", company: "Bhugol Energy Development Company Limited", ltp: 340, sharesOut: 5440534, floated: 5440534, mcap: 1849781560, floatedMcap: 1849781560, impact: "0.04 %", vol50d: 41606.32 },
+            { symbol: "MCHL", company: "Menchhiyam Hydropower Limited", ltp: 304.8, sharesOut: 5425833, floated: 5425833, mcap: 1653793898.4, floatedMcap: 1653793898, impact: "0.04 %", vol50d: 14241.6 },
+            { symbol: "DOLTI", company: "Dolti Power Company Ltd", ltp: 345, sharesOut: 5364860, floated: 5364860, mcap: 1850876700, floatedMcap: 1850876700, impact: "0.04 %", vol50d: 60084.22 },
+            { symbol: "NABBC", company: "Narayani Development Bank Limited", ltp: 752, sharesOut: 5249931, floated: 1522479.87, mcap: 3947947811.2, floatedMcap: 1144904865, impact: "0.09 %", vol50d: 9762.9 },
+            { symbol: "ULHC", company: "Upper Lohore Hydropower Company Limited", ltp: 496.8, sharesOut: 5098040, floated: 2251515, mcap: 2532706272, floatedMcap: 1118552652, impact: "0.06 %", vol50d: 20412.48 },
+            { symbol: "SPC", company: "Samling Power Company Limited", ltp: 417, sharesOut: 5000000, floated: 5000000, mcap: 2085000000, floatedMcap: 2085000000, impact: "0.05 %", vol50d: 6285.6 },
+            { symbol: "ILBS", company: "Infinity Laghubitta Bittiya Sanstha Limited", ltp: 896.8, sharesOut: 4974224, floated: 1616622.66, mcap: 4460883701.41, floatedMcap: 1449787203, impact: "0.10 %", vol50d: 2669.04 },
+            { symbol: "TSHL", company: "Three Star Hydropower Limited", ltp: 435.1, sharesOut: 4925000, floated: 723975, mcap: 2142867500, floatedMcap: 315001523, impact: "0.05 %", vol50d: 2646.3 },
+            { symbol: "NADEP", company: "Nadep Laghubittiya bittya Sanstha Ltd.", ltp: 725, sharesOut: 4857600, floated: 1457280, mcap: 3521760000, floatedMcap: 1056528000, impact: "0.08 %", vol50d: 1024.76 },
+            { symbol: "UMRH", company: "United Idi-Mardi and R.B. Hydropower Limited", ltp: 517.8, sharesOut: 4838652, floated: 4838652, mcap: 2505454005.6, floatedMcap: 2505454006, impact: "0.05 %", vol50d: 7626.88 }
+        ];
+
+        const rawData = fullData.filter(d => d.symbol !== 'GLH' && d.symbol !== 'GHL');
+
+        // ---- KPI (same as before) ----
+        const totalCompanies = rawData.length;
+        const totalMcap = rawData.reduce((s, d) => s + d.mcap, 0);
+        const totalFloatedMcap = rawData.reduce((s, d) => s + d.floatedMcap, 0);
+        const avgImpact = rawData.reduce((s, d) => s + parseFloat(d.impact.replace('%','').trim()), 0) / totalCompanies;
+        const totalValueTraded = rawData.reduce((s, d) => s + (d.ltp * d.vol50d), 0);
+        const avgLiquidity = rawData.reduce((s, d) => s + (d.vol50d / d.sharesOut * 100), 0) / totalCompanies;
+        const avgFloatPen = rawData.reduce((s, d) => s + (d.floated / d.sharesOut * 100), 0) / totalCompanies;
+        const sorted = [...rawData].sort((a,b) => b.mcap - a.mcap);
+        const top10Mcap = sorted.slice(0,10).reduce((s, d) => s + d.mcap, 0);
+        const cr10 = (top10Mcap / totalMcap) * 100;
+        const highest = sorted[0];
+
+        const kpiContainer = document.getElementById('kpiContainer');
+        kpiContainer.innerHTML = `
+            <div class="kpi-card"><div class="kpi-label"><i class="fas fa-layer-group"></i> Companies</div><div class="kpi-value">${totalCompanies}</div><div class="kpi-sub"><span>${rawData.filter(d => d.impact.includes('0.10')).length} with 0.10% impact</span></div></div>
+            <div class="kpi-card"><div class="kpi-label"><i class="fas fa-coins"></i> Total mcap (NPR)</div><div class="kpi-value">${(totalMcap / 1e9).toFixed(2)}B</div><div class="kpi-sub">${(totalMcap / 1e7).toFixed(1)} करोड़</div></div>
+            <div class="kpi-card"><div class="kpi-label"><i class="fas fa-arrow-trend-up"></i> Floated mcap</div><div class="kpi-value">${(totalFloatedMcap / 1e9).toFixed(2)}B</div><div class="kpi-sub">${((totalFloatedMcap / totalMcap) * 100).toFixed(1)}% floated</div></div>
+            <div class="kpi-card"><div class="kpi-label"><i class="fas fa-bullseye"></i> Avg. impact</div><div class="kpi-value">${avgImpact.toFixed(2)}%</div><div class="kpi-sub">top: ${highest.symbol} · ${(highest.mcap / 1e9).toFixed(2)}B</div></div>
+            <div class="kpi-card"><div class="kpi-label"><i class="fas fa-money-bill-wave"></i> Value traded</div><div class="kpi-value">${(totalValueTraded / 1e6).toFixed(1)}M</div><div class="kpi-sub">daily avg (NPR)</div></div>
+            <div class="kpi-card"><div class="kpi-label"><i class="fas fa-water"></i> Avg liquidity</div><div class="kpi-value">${avgLiquidity.toFixed(2)}%</div><div class="kpi-sub">vol / sharesOut</div></div>
+            <div class="kpi-card"><div class="kpi-label"><i class="fas fa-float"></i> Float penetration</div><div class="kpi-value">${avgFloatPen.toFixed(1)}%</div><div class="kpi-sub">avg floated %</div></div>
+            <div class="kpi-card"><div class="kpi-label"><i class="fas fa-chart-pie"></i> Top10 concentration</div><div class="kpi-value">${cr10.toFixed(1)}%</div><div class="kpi-sub">${sorted.slice(0,10).map(d=>d.symbol).join(', ')}</div></div>
+        `;
+
+        // ----- CHART 1: Bar (top 20) -----
+        const top20 = sorted.slice(0, 20);
+        const labels = top20.map(d => d.symbol);
+        const mcapValues = top20.map(d => +(d.mcap / 1e6).toFixed(1));
+        const floatedValues = top20.map(d => +(d.floatedMcap / 1e6).toFixed(1));
+
+        new Chart(document.getElementById('mcapChart'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Total mcap (NPR M)', data: mcapValues, backgroundColor: '#1f6fcf', borderRadius: 6, barPercentage: 0.6 },
+                    { label: 'Floated mcap (NPR M)', data: floatedValues, backgroundColor: '#ff9f4a', borderRadius: 6, barPercentage: 0.6 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 12, font: { weight: '500', size: 11 } } } },
+                scales: { y: { beginAtZero: true, ticks: { callback: v => v + 'M', font: { size: 9 } }, grid: { color: '#e9eff5' } }, x: { grid: { display: false }, ticks: { font: { size: 9 } } } }
+            }
+        });
+
+        // ----- CHART 2: Sector donut (hydropower vs finance) -----
+        const hydroKeywords = ['HYDRO', 'POWER', 'ENERGY', 'HYDROPOWER', 'KHOLA', 'RAPTI', 'BARUN', 'MAKAR', 'MANDAL', 'HEWAKHOLA', 'LOHORE', 'INGWA', 'MENCHHIYAM', 'DOLTI', 'BUDDHA', 'TERHATHUM', 'MOLUNG', 'EASTERN', 'JOSHI', 'SAMLING', 'UNITED', 'IDI', 'MARDI', 'BHUGOL', 'CHHYANGDI', 'MAYA', 'MOUNTAIN', 'GHALEMDI', 'GREENLIFE'];
+        const isHydro = (name) => hydroKeywords.some(k => name.toUpperCase().includes(k));
+        const hydroMcap = rawData.filter(d => isHydro(d.company)).reduce((s, d) => s + d.mcap, 0);
+        const financeMcap = totalMcap - hydroMcap;
+
+        new Chart(document.getElementById('sectorChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Hydropower', 'Finance & Others'],
+                datasets: [{
+                    data: [hydroMcap, financeMcap],
+                    backgroundColor: ['#1f6fcf', '#ff9f4a'],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+                    tooltip: { callbacks: { label: ctx => `${ctx.label}: ${(ctx.raw / 1e9).toFixed(2)}B (${(ctx.raw / totalMcap * 100).toFixed(1)}%)` } }
+                },
+                cutout: '60%'
+            }
+        });
+
+        // ----- CHART 3: Bubble (liquidity vs mcap, size = value traded) -----
+        const bubbleData = rawData.map(d => {
+            const liq = (d.vol50d / d.sharesOut) * 100; // liquidity %
+            const valTraded = d.ltp * d.vol50d / 1e6; // in millions
+            return { x: liq, y: d.mcap / 1e9, r: Math.min(Math.max(valTraded / 2, 3), 20), symbol: d.symbol };
+        }).filter(d => d.x > 0 && d.y > 0);
+
+        new Chart(document.getElementById('bubbleChart'), {
+            type: 'bubble',
+            data: {
+                datasets: [{
+                    label: 'Companies',
+                    data: bubbleData,
+                    backgroundColor: 'rgba(31, 111, 207, 0.6)',
+                    borderColor: '#1f6fcf',
+                    borderWidth: 0.5,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                const d = ctx.raw;
+                                return `${d.symbol}: liq ${d.x.toFixed(2)}%, mcap ${d.y.toFixed(2)}B, value ${(d.r * 2).toFixed(1)}M`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Liquidity (%)', font: { size: 9 } }, ticks: { font: { size: 8 } }, grid: { color: '#eef2f7' } },
+                    y: { title: { display: true, text: 'Market cap (B NPR)', font: { size: 9 } }, ticks: { font: { size: 8 } }, beginAtZero: true, grid: { color: '#eef2f7' } }
+                }
+            }
+        });
+
+        // ----- CHART 4: Top 10 liquidity (horizontal bar) -----
+        const sortedByLiq = [...rawData].sort((a,b) => (b.vol50d / b.sharesOut * 100) - (a.vol50d / a.sharesOut * 100)).slice(0, 10);
+        const liqLabels = sortedByLiq.map(d => d.symbol);
+        const liqData = sortedByLiq.map(d => +(d.vol50d / d.sharesOut * 100).toFixed(2));
+
+        new Chart(document.getElementById('liquidityBarChart'), {
+            type: 'bar',
+            data: {
+                labels: liqLabels,
+                datasets: [{
+                    label: 'Liquidity ratio (%)',
+                    data: liqData,
+                    backgroundColor: '#2a8c5e',
+                    borderRadius: 4,
+                    barPercentage: 0.6,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => `${ctx.raw}% of shares traded daily` } }
+                },
+                scales: {
+                    x: { beginAtZero: true, grid: { color: '#eef2f7' }, ticks: { font: { size: 9 } } },
+                    y: { grid: { display: false }, ticks: { font: { size: 9, weight: '500' } } }
+                }
+            }
+        });
+
+    })();
+</script>
+</body>
+</html>
